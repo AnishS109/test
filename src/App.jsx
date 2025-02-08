@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Test from './Test'
+import Exp from './Exp'
 
 function App() {
   const [count, setCount] = useState(0)
@@ -7,7 +8,8 @@ function App() {
   return (
     <>
       Jai Shree ganesh
-      <Test/>
+      {/* <Test/> */}
+      <Exp/>
     </>
   )
 }

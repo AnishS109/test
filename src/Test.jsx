@@ -4,7 +4,7 @@ import { Hands } from "@mediapipe/hands";
 import { FaceMesh } from "@mediapipe/face_mesh";
 import * as cam from "@mediapipe/camera_utils";
 
-const Test = () => {
+const GestureFaceDetection = () => {
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -113,4 +113,4 @@ const Test = () => {
   );
 };
 
-export default Test;
+export default GestureFaceDetection;
