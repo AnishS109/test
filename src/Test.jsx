@@ -1,116 +1,63 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import Webcam from "react-webcam";
-import { Hands } from "@mediapipe/hands";
-import { FaceMesh } from "@mediapipe/face_mesh";
-import * as cam from "@mediapipe/camera_utils";
+import io from "socket.io-client";
 
-const GestureFaceDetection = () => {
+const socket = io("http://127.0.0.1:5000", { transports: ["websocket"] });
+
+const Video = () => {
   const webcamRef = useRef(null);
-  const canvasRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const [recording, setRecording] = useState(false);
 
-  useEffect(() => {
-    // Initialize MediaPipe Hands
-    const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-    });
+  const startRecording = async () => {
+    try {
+      const stream = webcamRef.current.stream;
 
-    hands.setOptions({
-      maxNumHands: 2,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.5,
-    });
+      if (!stream || !stream.getVideoTracks().length) {
+        console.error("No video tracks found in the stream.");
+        return;
+      }
 
-    hands.onResults(onResults);
+      // Create MediaRecorder to capture the video
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: "video/webm" });
 
-    // Initialize MediaPipe FaceMesh
-    const faceMesh = new FaceMesh({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
-    });
+      // Send recorded video chunks to backend
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          console.log("📤 Sending video chunk...");
+          const reader = new FileReader();
+          reader.readAsArrayBuffer(event.data);
+          reader.onloadend = () => {
+            socket.emit("video_chunk", reader.result);
+          };
+        }
+      };
 
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.5,
-    });
-
-    faceMesh.onResults(onResults);
-
-    // Access webcam
-    if (webcamRef.current) {
-      const camera = new cam.Camera(webcamRef.current.video, {
-        onFrame: async () => {
-          await hands.send({ image: webcamRef.current.video });
-          await faceMesh.send({ image: webcamRef.current.video });
-        },
-        width: 640,
-        height: 480,
-      });
-      camera.start();
-    }
-  }, []);
-
-  // Drawing landmarks
-  const onResults = (results) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(
-      results.image,
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    // Draw hand landmarks
-    if (results.multiHandLandmarks) {
-      results.multiHandLandmarks.forEach((landmarks) => {
-        drawLandmarks(ctx, landmarks, "red");
-      });
-    }
-
-    // Draw face mesh
-    if (results.multiFaceLandmarks) {
-      results.multiFaceLandmarks.forEach((landmarks) => {
-        drawLandmarks(ctx, landmarks, "blue");
-      });
+      mediaRecorderRef.current.start(500); // Capture video chunks every 500ms
+      setRecording(true);
+    } catch (error) {
+      console.error("Error starting recording:", error);
     }
   };
 
-  // Draw keypoints on canvas
-  const drawLandmarks = (ctx, landmarks, color) => {
-    ctx.fillStyle = color;
-    landmarks.forEach((landmark) => {
-      ctx.beginPath();
-      ctx.arc(landmark.x * 640, landmark.y * 480, 3, 0, 2 * Math.PI);
-      ctx.fill();
-    });
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+    }
+    setRecording(false);
   };
 
   return (
-    <div style={{ position: "relative", width: "640px", height: "480px" }}>
-      <Webcam
-        ref={webcamRef}
-        style={{
-          position: "absolute",
-          width: 640,
-          height: 480,
-          transform: "scaleX(-1)", // Mirror the webcam for natural interaction
-        }}
-      />
-      <canvas
-        ref={canvasRef}
-        width={640}
-        height={480}
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-        }}
-      />
+    <div>
+      {/* Webcam Live Feed */}
+      <Webcam ref={webcamRef} width="640" height="480" mirrored />
+
+      {/* Start/Stop Recording Button */}
+      <button onClick={recording ? stopRecording : startRecording}>
+        {recording ? "Stop" : "Start"} Recording
+      </button>
     </div>
   );
 };
 
-export default GestureFaceDetection;
+export default Video;
